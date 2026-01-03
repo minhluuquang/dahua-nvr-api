@@ -31,10 +31,62 @@ export const CameraListResponseSchema = z
   })
   .openapi("CameraListResponse");
 
+export const CameraAllVideoInputSchema = z
+  .object({
+    BufDelay: z.number().optional(),
+    Enable: z.boolean().optional(),
+    ExtraStreamUrl: z.string().optional(),
+    MainStreamUrl: z.string().optional(),
+    Name: z.string().optional(),
+    ServiceType: z.string().optional(),
+  })
+  .passthrough()
+  .openapi("CameraAllVideoInput");
+
+export const CameraAllDeviceInfoSchema = z
+  .object({
+    Address: z.string().optional(),
+    AudioInputChannels: z.number().optional(),
+    DeviceClass: z.string().optional(),
+    DeviceType: z.string().optional(),
+    Enable: z.boolean().optional(),
+    Encryption: z.number().optional(),
+    HttpPort: z.number().optional(),
+    HttpsPort: z.number().optional(),
+    Mac: z.string().optional(),
+    Name: z.string().optional(),
+    PoE: z.boolean().optional(),
+    PoEPort: z.number().optional(),
+    Port: z.number().optional(),
+    ProtocolType: z.string().optional(),
+    RtspPort: z.number().optional(),
+    SerialNo: z.string().optional(),
+    UserName: z.string().optional(),
+    Password: z.string().optional(),
+    VideoInputChannels: z.number().optional(),
+    VideoInputs: z.array(CameraAllVideoInputSchema).optional(),
+  })
+  .passthrough()
+  .openapi("CameraAllDeviceInfo");
+
+export const CameraAllItemSchema = z
+  .object({
+    Channel: z.number().optional(),
+    DeviceID: z.string().optional(),
+    DeviceInfo: CameraAllDeviceInfoSchema.optional(),
+    Enable: z.boolean().optional(),
+    Type: z.string().optional(),
+    UniqueChannel: z.number().optional(),
+    VideoStandard: z.string().optional(),
+    VideoStream: z.string().optional(),
+  })
+  .passthrough()
+  .openapi("CameraAllItem");
+
 export const CameraAllResponseSchema = z
   .object({
     success: z.boolean().openapi({ example: true }),
-    cameras: z.array(z.record(z.string(), z.unknown())),
+    cameras: z.array(CameraAllItemSchema),
   })
   .openapi("CameraAllResponse");
 
@@ -51,8 +103,8 @@ export const CameraUpdateRequestSchema = z
       .string()
       .min(1)
       .openapi({ example: "abc123def456", description: "Session ID from login" }),
-    camera: z
-      .record(z.string(), z.unknown())
-      .openapi({ description: "Full camera object to update" }),
+    camera: CameraAllItemSchema.openapi({
+      description: "Full camera object to update",
+    }),
   })
   .openapi("CameraUpdateRequest");

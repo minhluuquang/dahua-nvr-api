@@ -414,8 +414,23 @@ export function registerCameraRoutes() {
       }
 
       const payload = { ...camera } as Record<string, unknown>;
+
+      if (
+        typeof payload.UniqueChannel === "number" &&
+        payload.UniqueChannel !== channel
+      ) {
+        return c.json(
+          {
+            success: false,
+            error: "UniqueChannel mismatch between path and payload",
+          },
+          400
+        );
+      }
+
       if (
         typeof payload.Channel === "number" &&
+        payload.UniqueChannel === undefined &&
         payload.Channel !== channel
       ) {
         return c.json(
@@ -427,12 +442,12 @@ export function registerCameraRoutes() {
         );
       }
 
-      if (payload.Channel === undefined) {
-        payload.Channel = channel;
-      }
-
       if (payload.UniqueChannel === undefined) {
         payload.UniqueChannel = channel;
+      }
+
+      if (payload.Channel === undefined) {
+        payload.Channel = channel;
       }
 
       const result = await client.setCamera(payload);
