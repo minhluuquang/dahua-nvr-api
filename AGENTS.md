@@ -8,6 +8,7 @@ Keep changes small, consistent, and TypeScript-first.
 - Language: TypeScript with strict compiler settings.
 - Frameworks: Hono (HTTP), zod + zod-openapi for schemas.
 - API style: REST wrapper around Dahua RPC endpoints.
+- IMPORTANT: This API is reverse engineered from the Dahua NVR web client. Match its RPC flows, payload shapes, and encryption behavior.
 
 ## Repo Layout
 ```
@@ -123,6 +124,13 @@ src/
 - Do not log credentials or session IDs.
 - If adding logs, keep them minimal and structured.
 - Prefer `console.log` for dev-only messages.
+
+## Reverse-Engineering Checklist
+- Match the web client payload shape (full objects, required defaults).
+- Prefer UniqueChannel for indexing; Channel can be misleading.
+- Use encrypted RPC for write operations; plain RPC is usually read-only.
+- Verify updates with a follow-up read; success responses can be no-ops.
+- Log pre-encrypt plaintext and post-decrypt responses when debugging.
 
 ## Adding New Endpoints (Checklist)
 1. Add request/response schemas in appropriate `src/schemas/*.ts` file.

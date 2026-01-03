@@ -413,11 +413,11 @@ export function registerCameraRoutes() {
         );
       }
 
-      const payload = { ...camera } as Record<string, unknown>;
+      const update = { ...camera } as Record<string, unknown>;
 
       if (
-        typeof payload.UniqueChannel === "number" &&
-        payload.UniqueChannel !== channel
+        typeof update.UniqueChannel === "number" &&
+        update.UniqueChannel !== channel
       ) {
         return c.json(
           {
@@ -429,9 +429,9 @@ export function registerCameraRoutes() {
       }
 
       if (
-        typeof payload.Channel === "number" &&
-        payload.UniqueChannel === undefined &&
-        payload.Channel !== channel
+        typeof update.Channel === "number" &&
+        update.UniqueChannel === undefined &&
+        update.Channel !== channel
       ) {
         return c.json(
           {
@@ -442,15 +442,64 @@ export function registerCameraRoutes() {
         );
       }
 
-      if (payload.UniqueChannel === undefined) {
-        payload.UniqueChannel = channel;
+      if (update.UniqueChannel === undefined) {
+        update.UniqueChannel = channel;
       }
 
-      if (payload.Channel === undefined) {
-        payload.Channel = channel;
+      const existing = (await client.rpc("LogicDeviceManager.getCameraAll", {})) as {
+        params?: { camera?: Array<Record<string, unknown>> };
+      };
+
+      const current = (existing.params?.camera || []).find((item) => {
+        const unique = item.UniqueChannel;
+        const chan = item.Channel;
+        return unique === channel || chan === channel;
+      });
+
+      if (!current) {
+        return c.json(
+          {
+            success: false,
+            error: `Camera not found for channel ${channel}`,
+          },
+          404
+        );
       }
 
-      const result = await client.setCamera(payload);
+      const stateResult = (await client.rpc("LogicDeviceManager.getCameraState", {
+        uniqueChannels: [channel],
+      })) as {
+        params?: { states?: Array<{ channel: number; connectionState?: string }> };
+      };
+
+      const showStatus = stateResult.params?.states?.[0]?.connectionState;
+
+      const merged = {
+        ...current,
+        ...update,
+        UniqueChannel: current.UniqueChannel ?? update.UniqueChannel ?? channel,
+        Channel: current.Channel ?? update.Channel ?? channel,
+        showStatus: showStatus ?? (current as Record<string, unknown>).showStatus,
+        DeviceInfo: {
+          ...(current.DeviceInfo as Record<string, unknown> | undefined),
+          ...(update.DeviceInfo as Record<string, unknown> | undefined),
+        },
+      } as Record<string, unknown>;
+
+      const deviceInfo = merged.DeviceInfo as Record<string, unknown> | undefined;
+      if (deviceInfo) {
+        if (deviceInfo.Password === undefined) {
+          deviceInfo.Password = "";
+        }
+        if (deviceInfo.LoginType === undefined) {
+          deviceInfo.LoginType = 0;
+        }
+        if (deviceInfo.b_isMultiVideoSensor === undefined) {
+          deviceInfo.b_isMultiVideoSensor = false;
+        }
+      }
+
+      const result = await client.setCamera(merged);
       return c.json(
         {
           success: true,

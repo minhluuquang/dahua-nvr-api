@@ -401,6 +401,11 @@ export class DahuaClient {
       body.session = sessionId;
     }
 
+    const requestBody = JSON.stringify(body);
+    console.log(
+      `[Dahua RPC] -> ${endpoint} ${method} ${requestBody}`
+    );
+
     const response = await fetch(`${this.host}${endpoint}`, {
       method: "POST",
       headers: {
@@ -408,10 +413,15 @@ export class DahuaClient {
         Accept: "application/json, text/javascript, */*; q=0.01",
         "X-Requested-With": "XMLHttpRequest",
       },
-      body: JSON.stringify(body),
+      body: requestBody,
     });
 
-    return response.json();
+    const responseJson = await response.json();
+    console.log(
+      `[Dahua RPC] <- ${endpoint} ${method} status=${response.status} ${JSON.stringify(responseJson)}`
+    );
+
+    return responseJson;
   }
 
   /**
@@ -468,6 +478,10 @@ export class DahuaClient {
     // Encrypt the payload
     const encrypted = this.encryptContent(payload, encryptInfo);
 
+    console.log(
+      `[Dahua RPC] >> ${method} plaintext:\n${JSON.stringify(payload, null, 2)}`
+    );
+
     // Send encrypted request
     const response = (await this.sendRpc(
       method,
@@ -490,11 +504,18 @@ export class DahuaClient {
         encrypted.mode,
         response.params.content
       );
+      console.log(
+        `[Dahua RPC] << ${method} decrypted:\n${JSON.stringify(decrypted, null, 2)}`
+      );
       return {
         ...response,
         params: decrypted,
       };
     }
+
+    console.log(
+      `[Dahua RPC] << ${method} response:\n${JSON.stringify(response, null, 2)}`
+    );
 
     return response;
   }

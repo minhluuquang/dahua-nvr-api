@@ -1,5 +1,7 @@
 # Dahua NVR/Camera API Documentation
 
+IMPORTANT: This API is reverse engineered from the Dahua NVR web client. It intentionally mirrors the web client’s RPC flows, payload shapes, and encryption behavior.
+
 A REST API wrapper for Dahua NVR and IP Camera devices, built with Hono.js.
 
 ## Overview
@@ -9,12 +11,7 @@ This API provides a simplified interface to interact with Dahua surveillance dev
 ## Table of Contents
 
 - [Authentication](./auth.md) - Login, logout, and session management
-- [System](./system.md) - Device information and system configuration
 - [Camera](./camera.md) - Camera channels and video settings
-- [Storage](./storage.md) - HDD, recording, and playback
-- [Network](./network.md) - Network configuration
-- [PTZ](./ptz.md) - Pan-Tilt-Zoom control
-- [Events](./events.md) - Alarms, motion detection, and notifications
 
 ## Quick Start
 
