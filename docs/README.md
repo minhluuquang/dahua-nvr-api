@@ -21,18 +21,18 @@ This API provides a simplified interface to interact with Dahua surveillance dev
 ### Installation
 
 ```bash
-npm install
+bun install
 ```
 
 ### Running the Server
 
 ```bash
 # Development
-npm run dev
+bun run dev
 
 # Production
-npm run build
-npm start
+bun run build
+bun run start
 ```
 
 ### API Endpoints
@@ -123,12 +123,43 @@ curl -X POST http://localhost:3000/api/logout \
 
 ## Architecture
 
+### Request Flow
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────────┐
 │   Client    │────▶│  Hono API   │────▶│  Dahua Device   │
 │  (REST)     │◀────│  Server     │◀────│  (RPC2)         │
 └─────────────┘     └─────────────┘     └─────────────────┘
 ```
+
+### Code Structure
+```
+src/
+├── index.ts              # Server bootstrap
+├── app.ts                # Hono app + middleware
+├── openapi.ts            # OpenAPI config + Swagger UI
+├── dahua-client.ts       # Dahua RPC client
+├── schemas/              # Zod + OpenAPI schemas
+│   ├── index.ts          # Barrel export
+│   ├── common.ts         # Shared schemas
+│   ├── auth.ts           # Authentication schemas
+│   ├── camera.ts         # Camera schemas
+│   └── rpc.ts            # RPC schemas
+├── routes/               # Route definitions + handlers
+│   ├── index.ts          # Route registration
+│   ├── health.ts         # Health check
+│   ├── auth.ts           # Login/logout/keepalive
+│   ├── cameras.ts        # Camera management
+│   └── rpc.ts            # Generic RPC calls
+└── services/             # Business logic
+    ├── session.ts        # Session management
+    └── camera.ts         # Camera data parsing
+```
+
+**Design Principles:**
+- **Feature-based organization** - Routes, schemas, and handlers grouped by domain
+- **Single Responsibility** - Each module has one clear purpose
+- **Type Safety** - Zod schemas provide runtime validation + TypeScript types
+- **Scalability** - Easy to add new domains (storage, events, PTZ)
 
 ## Supported Devices
 

@@ -5,8 +5,11 @@ import {
   createHash,
   createPublicKey,
   publicEncrypt,
-  randomInt,
 } from "crypto";
+
+// ============================================================================
+// Type Definitions
+// ============================================================================
 
 export interface DahuaLoginResponse {
   success: boolean;
@@ -29,50 +32,129 @@ export interface DahuaSession {
   keepAliveInterval: number;
 }
 
+/**
+ * Encryption info returned by Security.getEncryptInfo
+ * Example from reverse engineering:
+ * {
+ *   "AESPadding": ["ZERO", "PKCS7"],
+ *   "asymmetric": "RSA",
+ *   "cipher": ["AES", "RPAC"],
+ *   "pub": "N:E17FA1E4...,E:010001"
+ * }
+ */
 interface DahuaEncryptInfo {
-  asymmetric: boolean;
+  AESPadding?: string[];
+  asymmetric: string;
   cipher: string[];
   pub: string;
 }
 
-type CipherMode = "CBC" | "ECB";
+/**
+ * Encryption mode configuration
+ * Based on reverse engineering:
+ * - RPAC: randLen=32, mode=CBC (AES-256-CBC)
+ * - AES: randLen=16, mode=ECB (AES-128-ECB)
+ */
+interface EncryptMode {
+  type: "RPAC" | "AES";
+  randLen: number;
+  mode: "CBC" | "ECB";
+}
+
+/**
+ * Result of encrypting content
+ */
+interface EncryptedContent {
+  salt: string;      // RSA encrypted AES key (hex string)
+  cipher: string;    // e.g., "RPAC-256"
+  content: string;   // AES encrypted data (base64)
+  key: Buffer;       // Raw AES key for decrypting response
+  mode: "CBC" | "ECB";
+}
+
+// ============================================================================
+// Dahua Client Implementation
+// ============================================================================
 
 /**
  * Dahua NVR/Camera API Client
- * Implements the challenge-response authentication protocol
+ * 
+ * Implements:
+ * - Challenge-response authentication protocol
+ * - RPAC-256 encryption for secure RPC calls (RSA + AES-256-CBC)
+ * 
+ * Based on reverse engineering of the Dahua web interface.
  */
 export class DahuaClient {
   private host: string;
   private session: DahuaSession | null = null;
   private requestId = 1;
   private encryptInfo: DahuaEncryptInfo | null = null;
+  private encryptMode: EncryptMode | null = null;
 
   constructor(host: string) {
     // Ensure host doesn't have trailing slash
     this.host = host.replace(/\/$/, "");
   }
 
+  // ==========================================================================
+  // Utility Methods
+  // ==========================================================================
+
   /**
-   * MD5 hash helper
+   * MD5 hash helper - returns uppercase hex string
    */
   private md5(input: string): string {
     return createHash("md5").update(input).digest("hex").toUpperCase();
   }
 
-  private randomNumericString(length: number): string {
-    let out = "";
-    for (let i = 0; i < length; i += 1) {
-      out += randomInt(0, 10).toString();
+  /**
+   * Generate a random numeric string of specified length
+   * 
+   * Based on reverse engineering of RandomNum function:
+   * ```javascript
+   * function RandomNum(a) {
+   *   var c = "";
+   *   if (16 >= a) {
+   *     var d = Math.random().toString();
+   *     c = "0" === d.substr(d.length - a, 1) ? RandomNum(a) : d.substring(d.length - a);
+   *   } else {
+   *     for (var e = Math.floor(a / 16), f = 0; e > f; f++) c += RandomNum(16);
+   *     c += RandomNum(a % 16);
+   *   }
+   *   return c;
+   * }
+   * ```
+   */
+  private generateRandomKey(length: number): string {
+    let result = "";
+    while (result.length < length) {
+      // Get random digits from Math.random().toString()
+      const randomStr = Math.random().toString();
+      // Take digits from the end, avoiding leading zeros
+      const digits = randomStr.slice(-Math.min(16, length - result.length));
+      if (digits[0] !== "0" || result.length > 0) {
+        result += digits;
+      }
     }
-    return out;
+    return result.slice(0, length);
   }
 
-  private bufferFromBigIntString(value: string): Buffer {
+  // ==========================================================================
+  // RSA Key Handling
+  // ==========================================================================
+
+  /**
+   * Convert a hex string or decimal string to Buffer
+   */
+  private bigIntToBuffer(value: string): Buffer {
+    // Check if it's already hex
     if (/^[0-9a-fA-F]+$/.test(value)) {
       const hex = value.length % 2 === 0 ? value : `0${value}`;
       return Buffer.from(hex, "hex");
     }
 
+    // Convert decimal to hex
     const asBigInt = BigInt(value);
     let hex = asBigInt.toString(16);
     if (hex.length % 2 !== 0) {
@@ -81,7 +163,10 @@ export class DahuaClient {
     return Buffer.from(hex, "hex");
   }
 
-  private base64Url(buf: Buffer): string {
+  /**
+   * Convert Buffer to base64url format (for JWK)
+   */
+  private toBase64Url(buf: Buffer): string {
     return buf
       .toString("base64")
       .replace(/\+/g, "-")
@@ -89,6 +174,12 @@ export class DahuaClient {
       .replace(/=+$/g, "");
   }
 
+  /**
+   * Build RSA public key from Dahua format
+   * 
+   * Dahua format: "N:<hex>,E:<hex>"
+   * Example: "N:E17FA1E4150B8DB6...,E:010001"
+   */
   private buildRsaPublicKey(pub: string) {
     const parts = pub.split(",");
     const nPart = parts.find((part) => part.startsWith("N:"));
@@ -100,67 +191,139 @@ export class DahuaClient {
 
     const nValue = nPart.split(":")[1];
     const eValue = ePart.split(":")[1];
-    const nBuffer = this.bufferFromBigIntString(nValue);
-    const eBuffer = this.bufferFromBigIntString(eValue);
+    const nBuffer = this.bigIntToBuffer(nValue);
+    const eBuffer = this.bigIntToBuffer(eValue);
 
+    // Create public key using JWK format
     return createPublicKey({
       key: {
         kty: "RSA",
-        n: this.base64Url(nBuffer),
-        e: this.base64Url(eBuffer),
+        n: this.toBase64Url(nBuffer),
+        e: this.toBase64Url(eBuffer),
       },
       format: "jwk",
     });
   }
 
-  private selectEncryptMode(cipherList: string[]) {
+  // ==========================================================================
+  // Encryption Methods (RPAC-256)
+  // ==========================================================================
+
+  /**
+   * Select encryption mode based on device capabilities
+   * 
+   * Based on reverse engineering of saveEncrypt function:
+   * ```javascript
+   * var b = {
+   *   RPAC: { randLen: 32, mode: "CBC" },
+   *   AES: { randLen: 16, mode: "ECB" }
+   * };
+   * ```
+   */
+  private selectEncryptMode(cipherList: string[]): EncryptMode {
     if (cipherList.includes("RPAC")) {
-      return { type: "RPAC", randLen: 32, mode: "CBC" as CipherMode };
+      return { type: "RPAC", randLen: 32, mode: "CBC" };
     }
-
     if (cipherList.includes("AES")) {
-      return { type: "AES", randLen: 16, mode: "ECB" as CipherMode };
+      return { type: "AES", randLen: 16, mode: "ECB" };
     }
-
     throw new Error(`Unsupported cipher list: ${cipherList.join(",")}`);
   }
 
-  private padZero(data: Buffer, blockSize: number): Buffer {
+  /**
+   * Pad data with zeros to block size (16 bytes for AES)
+   * 
+   * Based on reverse engineering - Dahua uses ZeroPadding:
+   * ```javascript
+   * padding: CryptoJS.pad.ZeroPadding
+   * ```
+   */
+  private padZero(data: Buffer, blockSize: number = 16): Buffer {
     const remainder = data.length % blockSize;
     if (remainder === 0) {
       return data;
     }
-
     const padding = Buffer.alloc(blockSize - remainder, 0x00);
     return Buffer.concat([data, padding]);
   }
 
+  /**
+   * Remove zero padding from decrypted data
+   */
+  private unpadZero(data: Buffer): Buffer {
+    let end = data.length;
+    while (end > 0 && data[end - 1] === 0x00) {
+      end--;
+    }
+    return data.slice(0, end);
+  }
+
+  /**
+   * Encrypt content for secure RPC calls
+   * 
+   * Based on reverse engineering of EncryptInfo function:
+   * ```javascript
+   * function(a, b, c) {
+   *   var j = RandomNum(a);  // Generate random AES key
+   *   var k = new RSAKey();
+   *   k.setPublic(g.N, g.E);
+   *   var l = k.encrypt(j);  // RSA encrypt the AES key
+   *   var m = CryptoJS.enc.Utf8.parse(j);
+   *   var n = CryptoJS.AES.encrypt(
+   *     CryptoJS.enc.Utf8.parse(JSON.stringify(d)),
+   *     m,
+   *     {
+   *       iv: CryptoJS.enc.Utf8.parse("0000000000000000"),
+   *       mode: CryptoJS.mode[b],
+   *       padding: CryptoJS.pad.ZeroPadding
+   *     }
+   *   );
+   *   return {
+   *     cipher: e + "-" + 8 * a,  // e.g., "RPAC-256"
+   *     salt: l,                   // RSA encrypted key (hex)
+   *     key: m,                    // AES key
+   *     content: n.toString()      // AES encrypted content (base64)
+   *   };
+   * }
+   * ```
+   */
   private encryptContent(
     data: Record<string, unknown>,
     encryptInfo: DahuaEncryptInfo
-  ) {
+  ): EncryptedContent {
+    // Select encryption mode
     const mode = this.selectEncryptMode(encryptInfo.cipher);
-    const keyString = this.randomNumericString(mode.randLen);
+    
+    // Generate random AES key
+    const keyString = this.generateRandomKey(mode.randLen);
     const keyBuffer = Buffer.from(keyString, "utf8");
+    
+    // IV is always "0000000000000000" (16 zeros as UTF-8)
     const iv = Buffer.from("0000000000000000", "utf8");
 
-    const algorithm =
-      mode.type === "RPAC" ? "aes-256-cbc" : "aes-128-ecb";
-    const cipher = createCipheriv(algorithm, keyBuffer, iv);
+    // Select algorithm based on mode
+    // RPAC with 32-byte key = AES-256-CBC
+    // AES with 16-byte key = AES-128-ECB
+    const algorithm = mode.type === "RPAC" ? "aes-256-cbc" : "aes-128-ecb";
+    
+    // Create cipher
+    const cipher = createCipheriv(algorithm, keyBuffer, mode.mode === "ECB" ? Buffer.alloc(0) : iv);
     cipher.setAutoPadding(false);
 
-    const plain = Buffer.from(JSON.stringify(data), "utf8");
-    const padded = this.padZero(plain, 16);
+    // Encrypt the JSON data
+    const plaintext = Buffer.from(JSON.stringify(data), "utf8");
+    const padded = this.padZero(plaintext);
     const encrypted = Buffer.concat([cipher.update(padded), cipher.final()]);
 
+    // RSA encrypt the AES key
     const rsaKey = this.buildRsaPublicKey(encryptInfo.pub);
-    const salt = publicEncrypt(
+    const encryptedKey = publicEncrypt(
       { key: rsaKey, padding: constants.RSA_PKCS1_PADDING },
       Buffer.from(keyString, "utf8")
     );
 
     return {
-      salt: salt.toString("hex"),
+      salt: encryptedKey.toString("hex"),
       cipher: `${mode.type}-${mode.randLen * 8}`,
       content: encrypted.toString("base64"),
       key: keyBuffer,
@@ -168,10 +331,34 @@ export class DahuaClient {
     };
   }
 
-  private decryptContent(key: Buffer, mode: CipherMode, content: string) {
+  /**
+   * Decrypt response content
+   * 
+   * Based on reverse engineering of UnEncryptInfo function:
+   * ```javascript
+   * function(a, b) {
+   *   var c = CryptoJS.AES.decrypt(b, a, {
+   *     iv: CryptoJS.enc.Utf8.parse("0000000000000000"),
+   *     mode: CryptoJS.mode[this.encryptMode.info.mode],
+   *     padding: CryptoJS.pad.ZeroPadding
+   *   });
+   *   return JSON.parse(CryptoJS.enc.Utf8.stringify(c));
+   * }
+   * ```
+   */
+  private decryptContent(
+    key: Buffer,
+    mode: "CBC" | "ECB",
+    content: string
+  ): unknown {
     const iv = Buffer.from("0000000000000000", "utf8");
     const algorithm = mode === "CBC" ? "aes-256-cbc" : "aes-128-ecb";
-    const decipher = createDecipheriv(algorithm, key, iv);
+    
+    const decipher = createDecipheriv(
+      algorithm,
+      key,
+      mode === "ECB" ? Buffer.alloc(0) : iv
+    );
     decipher.setAutoPadding(false);
 
     const encrypted = Buffer.from(content, "base64");
@@ -180,90 +367,20 @@ export class DahuaClient {
       decipher.final(),
     ]);
 
-    const unpadded = decrypted.toString("utf8").replace(/\x00+$/g, "");
+    // Remove zero padding and parse JSON
+    const unpadded = this.unpadZero(decrypted);
+    
     try {
-      return JSON.parse(unpadded);
+      return JSON.parse(unpadded.toString("utf8"));
     } catch {
-      const fallback = decrypted.toString("latin1").replace(/\x00+$/g, "");
-      return JSON.parse(fallback);
+      // Fallback to latin1 encoding if UTF-8 fails
+      return JSON.parse(unpadded.toString("latin1"));
     }
   }
 
-  private async ensureEncryptInfo(): Promise<DahuaEncryptInfo> {
-    if (this.encryptInfo) {
-      return this.encryptInfo;
-    }
-
-    const response = (await this.sendRpc("Security.getEncryptInfo", {})) as {
-      params?: DahuaEncryptInfo;
-    };
-
-    if (!response.params) {
-      throw new Error("Failed to fetch encryption info");
-    }
-
-    this.encryptInfo = response.params;
-    return response.params;
-  }
-
-  private async encryptContentSend(
-    method: string,
-    payload: Record<string, unknown>
-  ): Promise<unknown> {
-    if (!this.session) {
-      throw new Error("Not logged in");
-    }
-
-    const encryptInfo = await this.ensureEncryptInfo();
-    if (!encryptInfo.asymmetric) {
-      return this.sendRpc(method, payload, "/RPC2", this.session.sessionId);
-    }
-
-    const encrypted = this.encryptContent(payload, encryptInfo);
-    const response = (await this.sendRpc(
-      method,
-      {
-        salt: encrypted.salt,
-        cipher: encrypted.cipher,
-        content: encrypted.content,
-      },
-      "/RPC2",
-      this.session.sessionId
-    )) as { params?: { content?: string } };
-
-    if (response.params?.content) {
-      const decrypted = this.decryptContent(
-        encrypted.key,
-        encrypted.mode,
-        response.params.content
-      );
-      return {
-        ...response,
-        params: decrypted,
-      };
-    }
-
-    return response;
-  }
-
-  /**
-   * Calculate the password hash using Dahua's digest algorithm
-   * Formula: MD5(username:random:MD5(username:realm:password))
-   */
-  private calculatePasswordHash(
-    username: string,
-    password: string,
-    realm: string,
-    random: string
-  ): string {
-    // Step 1: HA1 = MD5(username:realm:password)
-    const ha1 = this.md5(`${username}:${realm}:${password}`);
-
-    // Step 2: Final = MD5(username:random:HA1)
-    const finalHash = this.md5(`${username}:${random}:${ha1}`);
-
-    return finalHash;
-  }
+  // ==========================================================================
+  // RPC Methods
+  // ==========================================================================
 
   /**
    * Send RPC request to the Dahua device
@@ -295,6 +412,115 @@ export class DahuaClient {
     });
 
     return response.json();
+  }
+
+  /**
+   * Fetch encryption info from device
+   * 
+   * Calls Security.getEncryptInfo to get RSA public key and supported ciphers
+   */
+  private async fetchEncryptInfo(): Promise<DahuaEncryptInfo> {
+    if (this.encryptInfo) {
+      return this.encryptInfo;
+    }
+
+    const response = (await this.sendRpc(
+      "Security.getEncryptInfo",
+      {},
+      "/RPC2",
+      this.session?.sessionId
+    )) as {
+      result: boolean;
+      params?: DahuaEncryptInfo;
+    };
+
+    if (!response.params) {
+      throw new Error("Failed to fetch encryption info from device");
+    }
+
+    this.encryptInfo = response.params;
+    this.encryptMode = this.selectEncryptMode(response.params.cipher);
+    
+    return response.params;
+  }
+
+  /**
+   * Send encrypted RPC request
+   * 
+   * Used for sensitive operations like setting camera credentials
+   */
+  private async sendEncryptedRpc(
+    method: string,
+    payload: Record<string, unknown>
+  ): Promise<unknown> {
+    if (!this.session) {
+      throw new Error("Not logged in");
+    }
+
+    // Get encryption info
+    const encryptInfo = await this.fetchEncryptInfo();
+    
+    // If device doesn't support asymmetric encryption, fall back to plain RPC
+    if (!encryptInfo.asymmetric) {
+      return this.sendRpc(method, payload, "/RPC2", this.session.sessionId);
+    }
+
+    // Encrypt the payload
+    const encrypted = this.encryptContent(payload, encryptInfo);
+
+    // Send encrypted request
+    const response = (await this.sendRpc(
+      method,
+      {
+        salt: encrypted.salt,
+        cipher: encrypted.cipher,
+        content: encrypted.content,
+      },
+      "/RPC2",
+      this.session.sessionId
+    )) as {
+      result: boolean;
+      params?: { content?: string };
+    };
+
+    // Decrypt response if it contains encrypted content
+    if (response.params?.content) {
+      const decrypted = this.decryptContent(
+        encrypted.key,
+        encrypted.mode,
+        response.params.content
+      );
+      return {
+        ...response,
+        params: decrypted,
+      };
+    }
+
+    return response;
+  }
+
+  // ==========================================================================
+  // Authentication Methods
+  // ==========================================================================
+
+  /**
+   * Calculate the password hash using Dahua's digest algorithm
+   * 
+   * Formula: MD5(username:random:MD5(username:realm:password))
+   */
+  private calculatePasswordHash(
+    username: string,
+    password: string,
+    realm: string,
+    random: string
+  ): string {
+    // Step 1: HA1 = MD5(username:realm:password)
+    const ha1 = this.md5(`${username}:${realm}:${password}`);
+
+    // Step 2: Final = MD5(username:random:HA1)
+    const finalHash = this.md5(`${username}:${random}:${ha1}`);
+
+    return finalHash;
   }
 
   /**
@@ -368,6 +594,10 @@ export class DahuaClient {
     };
   }
 
+  // ==========================================================================
+  // Public API
+  // ==========================================================================
+
   /**
    * Login to the Dahua device
    */
@@ -400,6 +630,10 @@ export class DahuaClient {
         keepAliveInterval: authResult.keepAliveInterval || 60,
       };
 
+      // Reset encryption info for new session
+      this.encryptInfo = null;
+      this.encryptMode = null;
+
       return {
         success: true,
         session: challenge.session,
@@ -424,6 +658,8 @@ export class DahuaClient {
     try {
       await this.sendRpc("global.logout", {}, "/RPC2", this.session.sessionId);
       this.session = null;
+      this.encryptInfo = null;
+      this.encryptMode = null;
       return true;
     } catch {
       return false;
@@ -470,19 +706,42 @@ export class DahuaClient {
   }
 
   /**
-   * Update camera configuration using secure RPC
+   * Update camera configuration using secure encrypted RPC
+   * 
+   * This method uses LogicDeviceManager.secSetCamera which requires
+   * RPAC-256 encryption (RSA + AES-256-CBC).
+   * 
+   * @param cameras - Camera object or array of camera objects to update
+   * @returns RPC response with decrypted params
+   * 
+   * @example
+   * ```typescript
+   * // Get current camera config first
+   * const cameras = await client.rpc("LogicDeviceManager.getCameraAll", {});
+   * 
+   * // Modify the camera you want to update
+   * const camera = cameras.params.camera[0];
+   * camera.DeviceInfo.Address = "192.168.1.100";
+   * 
+   * // Update the camera
+   * await client.setCamera(camera);
+   * ```
    */
   async setCamera(
     cameras: Record<string, unknown> | Array<Record<string, unknown>>
   ): Promise<unknown> {
     const cameraList = Array.isArray(cameras) ? cameras : [cameras];
-    return this.encryptContentSend("LogicDeviceManager.secSetCamera", {
+    return this.sendEncryptedRpc("LogicDeviceManager.secSetCamera", {
       cameras: cameraList,
     });
   }
 
   /**
    * Send a generic RPC command (must be logged in)
+   * 
+   * @param method - RPC method name (e.g., "magicBox.getDeviceType")
+   * @param params - Optional parameters for the RPC call
+   * @returns RPC response
    */
   async rpc(
     method: string,
