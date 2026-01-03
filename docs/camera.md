@@ -167,6 +167,71 @@ curl "http://localhost:3000/api/cameras/0?session=YOUR_SESSION_ID"
 
 ---
 
+### Update Camera Configuration
+
+Update a camera using the secure `LogicDeviceManager.secSetCamera` RPC. The request must include the full camera object.
+
+**Endpoint:** `PUT /api/cameras/{channel}`
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `channel` | number | Camera channel number (0-based) |
+
+**Request Body:**
+
+```json
+{
+  "session": "YOUR_SESSION_ID",
+  "camera": {
+    "Channel": 0,
+    "DeviceID": "uuid:System_CONFIG_NETCAMERA_INFO_0",
+    "DeviceInfo": {
+      "Address": "192.168.1.221",
+      "AudioInputChannels": 1,
+      "DeviceClass": "IPC",
+      "DeviceType": "IPC-F22-D",
+      "Enable": true,
+      "Encryption": 0,
+      "HttpPort": 80,
+      "HttpsPort": 443,
+      "Mac": "ff:ff:ff:ff:ff:ff",
+      "Name": "7H07AB1RAZ64978",
+      "PoE": false,
+      "PoEPort": 0,
+      "Port": 37777,
+      "ProtocolType": "Private",
+      "RtspPort": 0,
+      "SerialNo": "7H07AB1RAZ64978",
+      "UserName": "admin",
+      "VideoInputChannels": 1,
+      "VideoInputs": [
+        {
+          "BufDelay": 160,
+          "Enable": true,
+          "ExtraStreamUrl": "",
+          "MainStreamUrl": "",
+          "Name": "",
+          "ServiceType": "AUTO"
+        }
+      ],
+      "Password": "",
+      "LoginType": 0,
+      "b_isMultiVideoSensor": false
+    },
+    "Enable": true,
+    "Type": "Remote",
+    "UniqueChannel": 0,
+    "VideoStandard": "PAL",
+    "VideoStream": "Main",
+    "showStatus": "Connected"
+  }
+}
+```
+
+---
+
 ## RPC Methods
 
 The REST API endpoints above use the following underlying RPC methods. You can also call these directly via the `/api/rpc` endpoint for more control.
