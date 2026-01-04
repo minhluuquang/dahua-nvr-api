@@ -158,9 +158,7 @@ export class StreamManager {
     const ready = await this.waitForPlaylist(playlistPath, 30, 500);
     if (!ready) {
       this.stopHlsStream(id);
-      throw new Error(
-        lastError || lastOutput || "HLS playlist was not created; check RTSP stream"
-      );
+      throw new Error(lastError || lastOutput || "HLS playlist was not created; check RTSP stream");
     }
 
     return session;
@@ -203,7 +201,11 @@ export class StreamManager {
     return url.port || (url.protocol === "https:" ? "443" : "80");
   }
 
-  private async waitForPlaylist(pathname: string, attempts: number, delayMs: number): Promise<boolean> {
+  private async waitForPlaylist(
+    pathname: string,
+    attempts: number,
+    delayMs: number
+  ): Promise<boolean> {
     for (let i = 0; i < attempts; i += 1) {
       try {
         const info = await stat(pathname);

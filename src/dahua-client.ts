@@ -65,10 +65,10 @@ interface EncryptMode {
  * Result of encrypting content
  */
 interface EncryptedContent {
-  salt: string;      // RSA encrypted AES key (hex string)
-  cipher: string;    // e.g., "RPAC-256"
-  content: string;   // AES encrypted data (base64)
-  key: Buffer;       // Raw AES key for decrypting response
+  salt: string; // RSA encrypted AES key (hex string)
+  cipher: string; // e.g., "RPAC-256"
+  content: string; // AES encrypted data (base64)
+  key: Buffer; // Raw AES key for decrypting response
   mode: "CBC" | "ECB";
 }
 
@@ -78,11 +78,11 @@ interface EncryptedContent {
 
 /**
  * Dahua NVR/Camera API Client
- * 
+ *
  * Implements:
  * - Challenge-response authentication protocol
  * - RPAC-256 encryption for secure RPC calls (RSA + AES-256-CBC)
- * 
+ *
  * Based on reverse engineering of the Dahua web interface.
  */
 export class DahuaClient {
@@ -111,7 +111,7 @@ export class DahuaClient {
 
   /**
    * Generate a random numeric string of specified length
-   * 
+   *
    * Based on reverse engineering of RandomNum function:
    * ```javascript
    * function RandomNum(a) {
@@ -168,16 +168,12 @@ export class DahuaClient {
    * Convert Buffer to base64url format (for JWK)
    */
   private toBase64Url(buf: Buffer): string {
-    return buf
-      .toString("base64")
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/g, "");
+    return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
   }
 
   /**
    * Build RSA public key from Dahua format
-   * 
+   *
    * Dahua format: "N:<hex>,E:<hex>"
    * Example: "N:E17FA1E4150B8DB6...,E:010001"
    */
@@ -212,7 +208,7 @@ export class DahuaClient {
 
   /**
    * Select encryption mode based on device capabilities
-   * 
+   *
    * Based on reverse engineering of saveEncrypt function:
    * ```javascript
    * var b = {
@@ -233,7 +229,7 @@ export class DahuaClient {
 
   /**
    * Pad data with zeros to block size (16 bytes for AES)
-   * 
+   *
    * Based on reverse engineering - Dahua uses ZeroPadding:
    * ```javascript
    * padding: CryptoJS.pad.ZeroPadding
@@ -261,7 +257,7 @@ export class DahuaClient {
 
   /**
    * Encrypt content for secure RPC calls
-   * 
+   *
    * Based on reverse engineering of EncryptInfo function:
    * ```javascript
    * function(a, b, c) {
@@ -294,11 +290,11 @@ export class DahuaClient {
   ): EncryptedContent {
     // Select encryption mode
     const mode = this.selectEncryptMode(encryptInfo.cipher);
-    
+
     // Generate random AES key
     const keyString = this.generateRandomKey(mode.randLen);
     const keyBuffer = Buffer.from(keyString, "utf8");
-    
+
     // IV is always "0000000000000000" (16 zeros as UTF-8)
     const iv = Buffer.from("0000000000000000", "utf8");
 
@@ -306,7 +302,7 @@ export class DahuaClient {
     // RPAC with 32-byte key = AES-256-CBC
     // AES with 16-byte key = AES-128-ECB
     const algorithm = mode.type === "RPAC" ? "aes-256-cbc" : "aes-128-ecb";
-    
+
     // Create cipher
     const cipher = createCipheriv(algorithm, keyBuffer, mode.mode === "ECB" ? Buffer.alloc(0) : iv);
     cipher.setAutoPadding(false);
@@ -334,7 +330,7 @@ export class DahuaClient {
 
   /**
    * Decrypt response content
-   * 
+   *
    * Based on reverse engineering of UnEncryptInfo function:
    * ```javascript
    * function(a, b) {
@@ -347,30 +343,19 @@ export class DahuaClient {
    * }
    * ```
    */
-  private decryptContent(
-    key: Buffer,
-    mode: "CBC" | "ECB",
-    content: string
-  ): unknown {
+  private decryptContent(key: Buffer, mode: "CBC" | "ECB", content: string): unknown {
     const iv = Buffer.from("0000000000000000", "utf8");
     const algorithm = mode === "CBC" ? "aes-256-cbc" : "aes-128-ecb";
-    
-    const decipher = createDecipheriv(
-      algorithm,
-      key,
-      mode === "ECB" ? Buffer.alloc(0) : iv
-    );
+
+    const decipher = createDecipheriv(algorithm, key, mode === "ECB" ? Buffer.alloc(0) : iv);
     decipher.setAutoPadding(false);
 
     const encrypted = Buffer.from(content, "base64");
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final(),
-    ]);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
 
     // Remove zero padding and parse JSON
     const unpadded = this.unpadZero(decrypted);
-    
+
     try {
       return JSON.parse(unpadded.toString("utf8"));
     } catch {
@@ -403,9 +388,7 @@ export class DahuaClient {
     }
 
     const requestBody = JSON.stringify(body);
-    console.log(
-      `[Dahua RPC] -> ${endpoint} ${method} ${requestBody}`
-    );
+    console.log(`[Dahua RPC] -> ${endpoint} ${method} ${requestBody}`);
 
     const response = await fetch(`${this.host}${endpoint}`, {
       method: "POST",
@@ -427,7 +410,7 @@ export class DahuaClient {
 
   /**
    * Fetch encryption info from device
-   * 
+   *
    * Calls Security.getEncryptInfo to get RSA public key and supported ciphers
    */
   private async fetchEncryptInfo(): Promise<DahuaEncryptInfo> {
@@ -451,13 +434,13 @@ export class DahuaClient {
 
     this.encryptInfo = response.params;
     this.encryptMode = this.selectEncryptMode(response.params.cipher);
-    
+
     return response.params;
   }
 
   /**
    * Send encrypted RPC request
-   * 
+   *
    * Used for sensitive operations like setting camera credentials
    */
   private async sendEncryptedRpc(
@@ -470,7 +453,7 @@ export class DahuaClient {
 
     // Get encryption info
     const encryptInfo = await this.fetchEncryptInfo();
-    
+
     // If device doesn't support asymmetric encryption, fall back to plain RPC
     if (!encryptInfo.asymmetric) {
       return this.sendRpc(method, payload, "/RPC2", this.session.sessionId);
@@ -479,9 +462,7 @@ export class DahuaClient {
     // Encrypt the payload
     const encrypted = this.encryptContent(payload, encryptInfo);
 
-    console.log(
-      `[Dahua RPC] >> ${method} plaintext:\n${JSON.stringify(payload, null, 2)}`
-    );
+    console.log(`[Dahua RPC] >> ${method} plaintext:\n${JSON.stringify(payload, null, 2)}`);
 
     // Send encrypted request
     const response = (await this.sendRpc(
@@ -500,23 +481,15 @@ export class DahuaClient {
 
     // Decrypt response if it contains encrypted content
     if (response.params?.content) {
-      const decrypted = this.decryptContent(
-        encrypted.key,
-        encrypted.mode,
-        response.params.content
-      );
-      console.log(
-        `[Dahua RPC] << ${method} decrypted:\n${JSON.stringify(decrypted, null, 2)}`
-      );
+      const decrypted = this.decryptContent(encrypted.key, encrypted.mode, response.params.content);
+      console.log(`[Dahua RPC] << ${method} decrypted:\n${JSON.stringify(decrypted, null, 2)}`);
       return {
         ...response,
         params: decrypted,
       };
     }
 
-    console.log(
-      `[Dahua RPC] << ${method} response:\n${JSON.stringify(response, null, 2)}`
-    );
+    console.log(`[Dahua RPC] << ${method} response:\n${JSON.stringify(response, null, 2)}`);
 
     return response;
   }
@@ -527,7 +500,7 @@ export class DahuaClient {
 
   /**
    * Calculate the password hash using Dahua's digest algorithm
-   * 
+   *
    * Formula: MD5(username:random:MD5(username:realm:password))
    */
   private calculatePasswordHash(
@@ -567,9 +540,7 @@ export class DahuaClient {
 
     // Error code 268632079 means "login challenge" - this is expected
     if (response.error?.code !== 268632079) {
-      throw new Error(
-        `Unexpected response during challenge: ${JSON.stringify(response)}`
-      );
+      throw new Error(`Unexpected response during challenge: ${JSON.stringify(response)}`);
     }
 
     return {
@@ -605,9 +576,7 @@ export class DahuaClient {
     };
 
     if (!response.result) {
-      throw new Error(
-        `Authentication failed: ${response.error?.message || "Unknown error"}`
-      );
+      throw new Error(`Authentication failed: ${response.error?.message || "Unknown error"}`);
     }
 
     return {
@@ -746,22 +715,22 @@ export class DahuaClient {
 
   /**
    * Update camera configuration using secure encrypted RPC
-   * 
+   *
    * This method uses LogicDeviceManager.secSetCamera which requires
    * RPAC-256 encryption (RSA + AES-256-CBC).
-   * 
+   *
    * @param cameras - Camera object or array of camera objects to update
    * @returns RPC response with decrypted params
-   * 
+   *
    * @example
    * ```typescript
    * // Get current camera config first
    * const cameras = await client.rpc("LogicDeviceManager.getCameraAll", {});
-   * 
+   *
    * // Modify the camera you want to update
    * const camera = cameras.params.camera[0];
    * camera.DeviceInfo.Address = "192.168.1.100";
-   * 
+   *
    * // Update the camera
    * await client.setCamera(camera);
    * ```
@@ -777,15 +746,12 @@ export class DahuaClient {
 
   /**
    * Send a generic RPC command (must be logged in)
-   * 
+   *
    * @param method - RPC method name (e.g., "magicBox.getDeviceType")
    * @param params - Optional parameters for the RPC call
    * @returns RPC response
    */
-  async rpc(
-    method: string,
-    params: Record<string, unknown> = {}
-  ): Promise<unknown> {
+  async rpc(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
     if (!this.session) {
       throw new Error("Not logged in");
     }

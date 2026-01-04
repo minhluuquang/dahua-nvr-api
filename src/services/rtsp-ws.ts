@@ -144,9 +144,7 @@ export class RtspOverWebSocket {
   }
 
   private handleMessage(data: WebSocket.RawData): void {
-    const buffer = Buffer.isBuffer(data)
-      ? data
-      : Buffer.from(data as ArrayBuffer);
+    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
 
     if (buffer.length === 0) {
       return;
@@ -177,7 +175,7 @@ export class RtspOverWebSocket {
     const bodyText = headerEnd >= 0 ? payload.slice(headerEnd + 4) : "";
     const lines = headerText.split("\r\n");
     const statusLine = lines.shift() || "";
-    const [protocol, statusCodeStr, ...statusParts] = statusLine.split(" ");
+    const [_protocol, statusCodeStr, ...statusParts] = statusLine.split(" ");
     const statusCode = Number.parseInt(statusCodeStr, 10) || 0;
     const statusText = statusParts.join(" ").trim();
 
@@ -297,9 +295,7 @@ export class RtspOverWebSocket {
   }
 
   private buildDigestAuth(method: string, uri: string, digest: DigestAuthState): string {
-    const ha1 = this.md5(
-      `${this.options.username}:${digest.realm}:${this.options.password}`
-    );
+    const ha1 = this.md5(`${this.options.username}:${digest.realm}:${this.options.password}`);
     const ha2 = this.md5(`${method}:${uri}`);
 
     let response: string;

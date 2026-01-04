@@ -10,16 +10,32 @@ export const CameraSchema = z
     rtspPort: z.number().openapi({ example: 554, description: "Camera RTSP port" }),
     deviceType: z.string().openapi({ example: "IPC-C22E-D", description: "Camera model" }),
     name: z.string().openapi({ example: "7J03FF4RAZ0B83E", description: "Camera name" }),
-    serialNo: z.string().openapi({ example: "7J03FF4RAZ0B83E", description: "Camera serial number" }),
+    serialNo: z
+      .string()
+      .openapi({ example: "7J03FF4RAZ0B83E", description: "Camera serial number" }),
     vendor: z.string().openapi({ example: "Private", description: "Camera manufacturer" }),
     protocolType: z.string().openapi({ example: "Dahua2", description: "Protocol type" }),
     userName: z.string().openapi({ example: "admin", description: "Camera username" }),
-    version: z.string().openapi({ example: "2.800.0000000.3.R,2021-10-26", description: "Firmware version" }),
-    connectionState: z.string().optional().openapi({ example: "Connected", description: "Connection status" }),
+    version: z
+      .string()
+      .openapi({ example: "2.800.0000000.3.R,2021-10-26", description: "Firmware version" }),
+    connectionState: z
+      .string()
+      .optional()
+      .openapi({ example: "Connected", description: "Connection status" }),
     enabled: z.boolean().openapi({ example: true, description: "Whether camera is enabled" }),
-    videoInputChannels: z.number().optional().openapi({ example: 1, description: "Number of video input channels" }),
-    audioInputChannels: z.number().optional().openapi({ example: 1, description: "Number of audio input channels" }),
-    alarmInChannels: z.number().optional().openapi({ example: 0, description: "Number of alarm input channels" }),
+    videoInputChannels: z
+      .number()
+      .optional()
+      .openapi({ example: 1, description: "Number of video input channels" }),
+    audioInputChannels: z
+      .number()
+      .optional()
+      .openapi({ example: 1, description: "Number of audio input channels" }),
+    alarmInChannels: z
+      .number()
+      .optional()
+      .openapi({ example: 0, description: "Number of alarm input channels" }),
   })
   .openapi("Camera");
 

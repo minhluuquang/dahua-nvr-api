@@ -6,11 +6,7 @@ export const StreamStartRequestSchema = z
       .string()
       .min(1)
       .openapi({ example: "abc123def456", description: "Session ID from login" }),
-    channel: z
-      .number()
-      .int()
-      .min(0)
-      .openapi({ example: 0, description: "Camera channel number" }),
+    channel: z.number().int().min(0).openapi({ example: 0, description: "Camera channel number" }),
     subtype: z
       .number()
       .int()
@@ -38,11 +34,9 @@ export const StreamStopResponseSchema = z
   })
   .openapi("StreamStopResponse");
 
-export const StreamSdpResponseSchema = z
-  .string()
-  .openapi({
-    example: "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=Live\r\nt=0 0",
-  });
+export const StreamSdpResponseSchema = z.string().openapi({
+  example: "v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=Live\r\nt=0 0",
+});
 
 export const HlsStartRequestSchema = z
   .object({
@@ -50,11 +44,7 @@ export const HlsStartRequestSchema = z
       .string()
       .min(1)
       .openapi({ example: "abc123def456", description: "Session ID from login" }),
-    channel: z
-      .number()
-      .int()
-      .min(0)
-      .openapi({ example: 0, description: "Camera channel number" }),
+    channel: z.number().int().min(0).openapi({ example: 0, description: "Camera channel number" }),
     subtype: z
       .number()
       .int()

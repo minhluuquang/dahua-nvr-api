@@ -42,15 +42,20 @@ src/
 - Dev server (tsx): `bun run dev`
 - Build (tsc): `bun run build`
 - Start built server: `bun run start`
-- Typecheck only: `bun run build` (no separate typecheck script).
+- Typecheck only: `bun run typecheck`
 
 ## Linting and Formatting
-- No lint or formatter configured (no eslint/prettier scripts).
-- Keep formatting consistent with existing files:
+- Lint with ESLint: `bun run lint`
+- Fix lint issues: `bun run lint:fix`
+- Format with Prettier: `bun run format`
+- Check formatting: `bun run format:check`
+- Pre-commit hook runs lint-staged (ESLint + Prettier) automatically.
+- Style rules:
   - 2-space indentation.
   - Semicolons.
   - Double quotes for strings.
-  - Trailing commas in multi-line objects/arrays.
+  - Trailing commas in ES5-compatible positions.
+  - 100 character print width.
 
 ## Tests (Current State)
 - No test runner or test scripts configured.

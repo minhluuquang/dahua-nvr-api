@@ -1,11 +1,7 @@
 import { createRoute } from "@hono/zod-openapi";
 import { app } from "../app";
 import { getSession } from "../services/session";
-import {
-  parseCameraData,
-  RemoteDeviceInfo,
-  CameraState,
-} from "../services/camera";
+import { parseCameraData, RemoteDeviceInfo, CameraState } from "../services/camera";
 import {
   ErrorSchema,
   SessionQuerySchema,
@@ -70,8 +66,7 @@ const camerasAllRoute = createRoute({
   path: "/api/cameras/all",
   tags: ["Cameras"],
   summary: "Get full camera payload",
-  description:
-    "Returns the raw LogicDeviceManager.getCameraAll payload for each camera.",
+  description: "Returns the raw LogicDeviceManager.getCameraAll payload for each camera.",
   request: {
     query: SessionQuerySchema,
   },
@@ -415,10 +410,7 @@ export function registerCameraRoutes() {
 
       const update = { ...camera } as Record<string, unknown>;
 
-      if (
-        typeof update.UniqueChannel === "number" &&
-        update.UniqueChannel !== channel
-      ) {
+      if (typeof update.UniqueChannel === "number" && update.UniqueChannel !== channel) {
         return c.json(
           {
             success: false,

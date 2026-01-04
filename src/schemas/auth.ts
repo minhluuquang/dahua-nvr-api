@@ -6,14 +6,8 @@ export const LoginRequestSchema = z
       .string()
       .url()
       .openapi({ example: "http://192.168.1.100", description: "Dahua device URL" }),
-    username: z
-      .string()
-      .min(1)
-      .openapi({ example: "admin", description: "Username" }),
-    password: z
-      .string()
-      .min(1)
-      .openapi({ example: "password123", description: "Password" }),
+    username: z.string().min(1).openapi({ example: "admin", description: "Username" }),
+    password: z.string().min(1).openapi({ example: "password123", description: "Password" }),
   })
   .openapi("LoginRequest");
 
