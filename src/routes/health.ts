@@ -34,6 +34,14 @@ export function registerHealthRoutes() {
         "GET /api/cameras/all": "Get raw camera payloads",
         "GET /api/cameras/:channel": "Get details for a specific camera",
         "PUT /api/cameras/:channel": "Update camera configuration",
+        "POST /api/streams/start": "Start a live stream",
+        "POST /api/streams/:id/stop": "Stop a live stream",
+        "GET /api/streams/:id/ws": "WebSocket for RTP packets",
+        "GET /api/streams/:id/sdp": "Get SDP for a stream",
+        "POST /api/streams/hls/start": "Start an HLS stream",
+        "POST /api/streams/hls/:id/stop": "Stop an HLS stream",
+        "GET /api/streams/hls/:id/:file": "Get HLS playlist/segment",
+        "GET /player/hls/:id": "Built-in HLS player page",
       },
     });
   });

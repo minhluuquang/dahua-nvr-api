@@ -17,10 +17,12 @@
     "@hono/swagger-ui": "^0.5.3",
     "@hono/zod-openapi": "^1.2.0",
     "hono": "^4.11.3",
+    "ws": "^8.18.3",
     "zod": "^4.3.4"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",
+    "@types/ws": "^8.5.12",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"

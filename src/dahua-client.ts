@@ -88,6 +88,7 @@ interface EncryptedContent {
 export class DahuaClient {
   private host: string;
   private session: DahuaSession | null = null;
+  private password: string | null = null;
   private requestId = 1;
   private encryptInfo: DahuaEncryptInfo | null = null;
   private encryptMode: EncryptMode | null = null;
@@ -650,6 +651,7 @@ export class DahuaClient {
         username,
         keepAliveInterval: authResult.keepAliveInterval || 60,
       };
+      this.password = password;
 
       // Reset encryption info for new session
       this.encryptInfo = null;
@@ -679,6 +681,7 @@ export class DahuaClient {
     try {
       await this.sendRpc("global.logout", {}, "/RPC2", this.session.sessionId);
       this.session = null;
+      this.password = null;
       this.encryptInfo = null;
       this.encryptMode = null;
       return true;
@@ -717,6 +720,21 @@ export class DahuaClient {
    */
   getSession(): DahuaSession | null {
     return this.session;
+  }
+
+  /**
+   * Get RTSP credentials for streaming
+   */
+  getRtspCredentials(): { host: string; username: string; password: string } {
+    if (!this.session || !this.password) {
+      throw new Error("Not logged in");
+    }
+
+    return {
+      host: this.host,
+      username: this.session.username,
+      password: this.password,
+    };
   }
 
   /**

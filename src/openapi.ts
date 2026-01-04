@@ -36,6 +36,7 @@ This API implements the Dahua challenge-response authentication protocol:
       { name: "Session", description: "Session management endpoints" },
       { name: "Cameras", description: "Camera management endpoints" },
       { name: "RPC", description: "Remote Procedure Call endpoints" },
+      { name: "Streams", description: "Live streaming endpoints" },
     ],
     servers: [
       {

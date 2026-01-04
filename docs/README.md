@@ -12,6 +12,7 @@ This API provides a simplified interface to interact with Dahua surveillance dev
 
 - [Authentication](./auth.md) - Login, logout, and session management
 - [Camera](./camera.md) - Camera channels and video settings
+- [Live](./live.md) - Live streaming (RTSP-over-WebSocket + HLS)
 
 ## Quick Start
 
